@@ -1,9 +1,4 @@
-Here's a clean, professional, and well-structured `README.md` file for your GitHub repository:
-
----
-
-````markdown
-# 🧠 MSRIT CGPA Scraper (AIML Branch)
+# 🧠 MSRIT CGPA Scraper (IS Branch)
 
 This is a simple Python script that automates the process of collecting CGPA data from the [MSRIT Results Portal](https://exam.msrit.edu/) using Selenium and Brave browser.
 
@@ -14,9 +9,9 @@ This is a simple Python script that automates the process of collecting CGPA dat
 ## 📦 Features
 
 - Uses **Selenium WebDriver** with stealth mode to avoid detection
-- Automatically inputs a range of USNs (AIML branch format: `1MS23ISxxx`)
+- Automatically inputs a range of USNs (IS branch format: `1MS23ISxxx`)
 - Collects and stores **CGPA** values
-- Exports the results to a CSV file (`msrit_cgpa_csAIML.csv`)
+- Exports the results to a CSV file (`msrit_cgpa_csIS.csv`)
 
 ---
 
@@ -36,7 +31,7 @@ This is a simple Python script that automates the process of collecting CGPA dat
 ```bash
 git clone https://github.com/your-username/msrit-cgpa-scraper.git
 cd msrit-cgpa-scraper
-````
+```
 
 2. **Install Dependencies**
 
@@ -52,18 +47,18 @@ python main.py
 
 4. **Manual Step**
 
-* Solve the CAPTCHA on the website manually
-* Enter **any valid USN** once to load the results page
-* Press `Enter` in the terminal when prompted
+- Solve the CAPTCHA on the website manually
+- Enter **any valid USN** once to load the results page
+- Press `Enter` in the terminal when prompted
 
 ---
 
 ## 📁 Output
 
-A file named `msrit_cgpa_csAIML.csv` will be generated with the following columns:
+A file named `msrit_cgpa_csIS.csv` will be generated with the following columns:
 
-* `USN`
-* `CGPA`
+- `USN`
+- `CGPA`
 
 Example:
 
@@ -86,10 +81,3 @@ Feel free to connect or raise issues in the repo for suggestions/improvements.
 ## 📜 Disclaimer
 
 This project is intended for **learning and personal use only**. Do not misuse or deploy this at scale. Use at your own risk.
-
-```
-
----
-
-Let me know if you want badges, GitHub Actions, or license information added!
-```
