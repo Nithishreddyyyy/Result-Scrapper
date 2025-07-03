@@ -39,8 +39,8 @@ def get_cgpa():
 
 results = []
 
-for i in range(1, 200):
-    usn = f"1MS23CI{str(i).zfill(3)}"
+for i in range(1, 200):                             #Change the range based on the requirement
+    usn = f"1MS23IS{str(i).zfill(3)}"               #Change the branch if needed
     driver.back()
     time.sleep(1)
 
