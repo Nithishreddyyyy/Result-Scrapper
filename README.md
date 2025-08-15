@@ -1,4 +1,4 @@
-# 🧠 MSRIT CGPA Scraper (Any Branch)
+# 🧠 MSRIT Result-Scrapper (Any Branch)
 
 This is a simple Python script that automates the process of collecting CGPA data from the [MSRIT Results Portal](https://exam.msrit.edu/) using Selenium and Brave browser.
 
