@@ -1,94 +1,86 @@
-import time
-import openpyxl
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.options import Options
+from selenium_stealth import stealth
+import pandas as pd
+import time
 
-# -----------------------
-# CONFIG
-# -----------------------
-URL = "https://exam.msrit.edu/index.php"
-CAPTCHA_VALUE = "MSRIT"   # The captcha text (static, doesn’t change)
-START_USN = 1
-END_USN = 150
-BRANCH_CODE = "IS"        # Branch code in USN
-YEAR = "23"               # Admission year in USN
-COLLEGE_CODE = "1MS"      # College prefix in USN
+# === Setup Brave Browser driver ===
+options = webdriver.ChromeOptions()
+options.binary_location = "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"  # Brave binary
+driver = webdriver.Chrome(options=options)
 
-# -----------------------
-# SETUP EXCEL
-# -----------------------
-wb = openpyxl.Workbook()
-ws = wb.active
-ws.append(["USN", "Name", "SGPA", "CGPA"])
+# === Stealth settings ===
+stealth(driver,
+        user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.119 Safari/537.36",
+        languages=["en-US", "en"],
+        vendor="Google Inc.",
+        platform="MacIntel",
+        webgl_vendor="Apple Inc.",
+        renderer="Apple GPU",
+        fix_hairline=True)
 
-# -----------------------
-# SETUP SELENIUM
-# -----------------------
-options = Options()
-options.add_argument("--headless")   # Run in background
-options.add_argument("--no-sandbox")
-options.add_argument("--disable-dev-shm-usage")
+driver.get("https://exam.msrit.edu/")
 
-driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+print("🔐 Solve the CAPTCHA manually and enter any valid USN to load the result options page.")
+input("✅ Press Enter once you are on the page where 'ODD Feb 2025' and 'Even May 2025' cards are visible...")
 
-for i in range(START_USN, END_USN + 1):
-    usn = f"{COLLEGE_CODE}{YEAR}{BRANCH_CODE}{i:03d}"
-    print(f"Fetching results for {usn}...")
+
+# === Function to extract CGPA ===
+def get_cgpa():
+    try:
+        all_elements = driver.find_elements(By.XPATH, "//*[text()='CGPA']")
+        for el in all_elements:
+            sibling = el.find_element(By.XPATH, "following-sibling::*[1]")
+            text = sibling.text.strip()
+            if text.replace('.', '', 1).isdigit():
+                return text
+        return None
+    except:
+        return None
+
+
+results = []
+
+for i in range(1, 200):                             # Change range as needed
+    usn = f"1MS23IS{str(i).zfill(3)}"               # Change branch if needed
+    driver.back()
+    time.sleep(1)
 
     try:
-        driver.get(URL)
-
-        # Fill USN
-        usn_input = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.NAME, "usn"))
-        )
+        # Enter USN
+        usn_input = driver.find_element(By.NAME, "usn")
         usn_input.clear()
         usn_input.send_keys(usn)
 
-        # Fill Captcha
-        captcha_input = driver.find_element(By.NAME, "captcha")
-        captcha_input.clear()
-        captcha_input.send_keys(CAPTCHA_VALUE)
-
-        # Submit
+        # Submit (Go button)
         driver.find_element(By.XPATH, "//input[@type='submit']").click()
+        time.sleep(1.5)
 
-        # Wait for exam options
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.XPATH, "//div[contains(text(),'Semester 4')]"))
-        )
+        # Click the "Even May 2025 → View Results" button
+        try:
+            even_button = driver.find_element(By.XPATH, "//div[contains(., 'Even May 2025')]//input[@value='VIEW RESULTS']")
+            even_button.click()
+            time.sleep(2)
+        except:
+            print(f"{usn} → 'Even May 2025' button not found, skipping.")
+            results.append({"USN": usn, "CGPA": "No Even May Result"})
+            continue
 
-        # Click Semester 4 View Results
-        sem4_button = driver.find_element(By.XPATH, "//div[contains(text(),'Semester 4')]/..//button")
-        sem4_button.click()
-
-        # Wait for result page
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.XPATH, "//div[contains(text(),'SGPA')]"))
-        )
-
-        # Extract Name, SGPA, CGPA
-        name = driver.find_element(By.XPATH, "//div[@class='studentname']").text.strip()
-        sgpa = driver.find_element(By.XPATH, "//div[contains(text(),'SGPA')]/following-sibling::div").text.strip()
-        cgpa = driver.find_element(By.XPATH, "//div[contains(text(),'CGPA')]/following-sibling::div").text.strip()
-
-        ws.append([usn, name, sgpa, cgpa])
+        # Extract CGPA
+        cgpa = get_cgpa()
+        if cgpa:
+            print(f"{usn} → {cgpa}")
+            results.append({"USN": usn, "CGPA": cgpa})
+        else:
+            print(f"{usn} → Invalid/No CGPA")
+            results.append({"USN": usn, "CGPA": "Invalid"})
 
     except Exception as e:
-        print(f"❌ Failed for {usn}: {e}")
-        ws.append([usn, "N/A", "N/A", "N/A"])
+        print(f"{usn} → Error: {e}")
+        results.append({"USN": usn, "CGPA": "Error"})
 
-    time.sleep(2)  # small delay to avoid being blocked
 
+# === Save results ===
+pd.DataFrame(results).to_csv("msrit_cgpa.csv", index=False)
+print("✅ Done! File saved as msrit_cgpa.csv")
 driver.quit()
-
-# -----------------------
-# SAVE EXCEL
-# -----------------------
-wb.save("MSRIT_Results.xlsx")
-print("✅ Results saved to MSRIT_Results.xlsx")
