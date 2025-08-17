@@ -20,45 +20,59 @@ START = 1
 END = 150
 OUTPUT_XLSX = "msrit_results_sem4_even_may_2025.xlsx"
 
+# PERFORMANCE SETTINGS - MORE CONSERVATIVE
+REDUCED_WAIT_TIME = 15      # Back to original 15 seconds
+PAGE_LOAD_TIMEOUT = 30      # Increased timeout
+IMPLICIT_WAIT = 5           # Increased implicit wait
+
 
 # -----------------------------
-# DRIVER (Brave + Selenium 4)
+# CONSERVATIVE DRIVER SETUP
 # -----------------------------
-options = webdriver.ChromeOptions()
-options.binary_location = BRAVE_BINARY
-# Optional: keep the window open for debugging
-# options.add_experimental_option("detach", True)
-
-service = Service(CHROMEDRIVER_PATH)
-driver = webdriver.Chrome(service=service, options=options)
-
-# Stealth
-stealth(driver,
-        user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.119 Safari/537.36",
-        languages=["en-US", "en"],
-        vendor="Google Inc.",
-        platform="MacIntel",
-        webgl_vendor="Apple Inc.",
-        renderer="Apple GPU",
-        fix_hairline=True)
-
-wait = WebDriverWait(driver, 15)
+def create_driver():
+    options = webdriver.ChromeOptions()
+    options.binary_location = BRAVE_BINARY
+    
+    # More conservative options - remove aggressive performance settings
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    # Remove --disable-images to ensure page loads properly
+    # Remove --disable-javascript to ensure site functionality
+    options.add_experimental_option("useAutomationExtension", False)
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    
+    # Use normal page load strategy instead of eager
+    # options.page_load_strategy = 'normal'  # Default is normal
+    
+    service = Service(CHROMEDRIVER_PATH)
+    driver = webdriver.Chrome(service=service, options=options)
+    
+    # More generous timeouts
+    driver.set_page_load_timeout(PAGE_LOAD_TIMEOUT)
+    driver.implicitly_wait(IMPLICIT_WAIT)
+    
+    # Stealth
+    stealth(driver,
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.119 Safari/537.36",
+            languages=["en-US", "en"],
+            vendor="Google Inc.",
+            platform="MacIntel",
+            webgl_vendor="Apple Inc.",
+            renderer="Apple GPU",
+            fix_hairline=True)
+    
+    return driver
 
 
 def text_is_numberish(s: str) -> bool:
     if not s:
         return False
     s = s.strip()
-    # allow values like 9, 9.5, 10.00
     return re.fullmatch(r"\d+(?:\.\d+)?", s) is not None
 
 
 def get_sgpa_cgpa() -> tuple[str | None, str | None]:
-    """
-    Extract SGPA and CGPA from result cards with structure:
-    <div class="credits-sec3"><h3>SGPA</h3><p>...</p></div>
-    <div class="credits-sec4"><h3>CGPA</h3><p>...</p></div>
-    """
+    """Extract SGPA and CGPA from result cards"""
     sgpa = None
     cgpa = None
     try:
@@ -81,9 +95,7 @@ def get_sgpa_cgpa() -> tuple[str | None, str | None]:
 
 
 def get_student_name_on_selection() -> str | None:
-    """
-    On the exam selection page, the student's name is in the left header card h3.
-    """
+    """Get student name from selection page"""
     try:
         el = driver.find_element(By.XPATH, "//div[contains(@class,'stu-data1')]//h3")
         name = el.text.strip()
@@ -93,25 +105,21 @@ def get_student_name_on_selection() -> str | None:
 
 
 def click_even_sem4_view_results():
-    """
-    Click the EXACT 'View Results' button inside the 'Even May 2025' + 'Semester 4' card.
-    Robust to case of the button text (value='View Results').
-    """
-    # wait for the selection cards to appear
-    wait.until(EC.presence_of_element_located((By.XPATH, "//h3[contains(., 'Please Select Exam') or contains(., 'Please Select')] | //div[contains(@class,'cn-result-card')]")))
-    # precise card -> button
-    btn_xpath = ("//div[.//h3[normalize-space()='Even May 2025'] "
-                 "and .//p[contains(normalize-space(),'Semester 4')]]"
-                 "//input[@type='button' and @value='View Results']")
+    """Click the View Results button for Even May 2025 / Semester 4"""
+    # Wait longer for cards to appear
+    wait.until(EC.presence_of_element_located((By.XPATH, "//div[contains(@class,'cn-card')]")))
+    
+    btn_xpath = ("//div[contains(@class,'cn-card')]"
+                "[.//h3[normalize-space()='Even May 2025']]"
+                "[.//p[normalize-space()='Semester 4']]"
+                "//input[@type='button' and @value='View Results']")
+    
     btn = wait.until(EC.element_to_be_clickable((By.XPATH, btn_xpath)))
     driver.execute_script("arguments[0].click();", btn)
 
 
 def click_site_back_button():
-    """
-    Use the site's back button (NOT browser back) to avoid captcha reset.
-    Try multiple selectors; last resort use history.back().
-    """
+    """Go back using site's back button"""
     candidates = [
         "//input[@type='button' and @value='Back']",
         "//button[normalize-space()='Back']",
@@ -124,20 +132,18 @@ def click_site_back_button():
             return
         except:
             pass
-    # If no explicit back button, try going back one step in history (still avoids a reload).
     driver.execute_script("window.history.back();")
 
 
 def on_selection_page() -> bool:
     try:
-        driver.find_element(By.XPATH, "//div[contains(@class,'cn-result-card')]//h3[contains(., 'Please Select Exam')]")
+        driver.find_element(By.XPATH, "//div[contains(@class,'cn-card')]//h3[contains(., 'Even May 2025')]")
         return True
     except:
         return False
 
 
 def on_result_page() -> bool:
-    # Heuristic: result tables include CGPA/SGPA labels
     try:
         driver.find_element(By.XPATH, "//*[normalize-space()='CGPA' or normalize-space()='SGPA']")
         return True
@@ -146,86 +152,122 @@ def on_result_page() -> bool:
 
 
 # -----------------------------
-# RUN
+# MAIN EXECUTION WITH BETTER ERROR HANDLING
 # -----------------------------
-driver.get(BASE_URL)
+print("🚀 MSRIT Results Scraper - Single Session (Conservative)")
+print(f"📊 Processing USNs {USN_PREFIX}{START:03d} to {USN_PREFIX}{END:03d}")
 
-print("🔐 Solve the CAPTCHA once in the browser.")
-print("➡️  Then enter any valid USN and press Go to reach the exam selection page.")
+# Initialize driver
+try:
+    driver = create_driver()
+    wait = WebDriverWait(driver, REDUCED_WAIT_TIME)
+    print("✅ Driver initialized successfully")
+except Exception as e:
+    print(f"❌ Failed to initialize driver: {e}")
+    exit(1)
+
+# Load website with retry
+max_retries = 3
+for attempt in range(max_retries):
+    try:
+        print(f"🌐 Attempting to load {BASE_URL} (attempt {attempt + 1}/{max_retries})")
+        driver.get(BASE_URL)
+        
+        # Wait for page to load - look for any element that indicates the page loaded
+        WebDriverWait(driver, 20).until(
+            EC.any_of(
+                EC.presence_of_element_located((By.NAME, "usn")),
+                EC.presence_of_element_located((By.XPATH, "//input[@type='submit']")),
+                EC.presence_of_element_located((By.XPATH, "//form")),
+                EC.presence_of_element_located((By.XPATH, "//*[contains(text(), 'USN') or contains(text(), 'Student')]"))
+            )
+        )
+        
+        print("✅ Website loaded successfully!")
+        print("🔐 Now solve the CAPTCHA and enter any valid USN")
+        print("➡️  Press Go to reach the exam selection page")
+        break
+        
+    except Exception as e:
+        print(f"⚠️ Attempt {attempt + 1} failed: {e}")
+        if attempt == max_retries - 1:
+            print("❌ Failed to load website after all attempts")
+            driver.quit()
+            exit(1)
+        else:
+            print("🔄 Retrying in 3 seconds...")
+            time.sleep(3)
+
 input("✅ Press ENTER here only when you see the two cards (ODD Feb 2025 & Even May 2025) for some USN... ")
 
 results = []
+total_usns = END - START + 1
 
 for i in range(START, END + 1):
     usn = f"{USN_PREFIX}{i:03d}"
+    current_num = i - START + 1
 
     try:
-        # Ensure we are on the selection page (not the home/captcha)
+        print(f"[{current_num}/{total_usns}] Processing {usn}...")
+
+        # Ensure we are on the selection page
         if not on_selection_page():
-            # Try to return to selection via site back (if we accidentally stayed on result)
             if on_result_page():
                 click_site_back_button()
                 WebDriverWait(driver, 10).until(lambda d: on_selection_page())
             else:
-                # We lost the session (rare). Go home, but this may require captcha again.
+                # Lost session - reload
+                print(f"🔄 Reloading website for {usn}")
                 driver.get(BASE_URL)
-                # Re-enter USN and submit to selection page (no reloads later).
                 usn_input = wait.until(EC.presence_of_element_located((By.NAME, "usn")))
                 usn_input.clear()
                 usn_input.send_keys(usn)
                 go_btn = driver.find_element(By.XPATH, "//input[@type='submit']")
                 driver.execute_script("arguments[0].click();", go_btn)
-                # If captcha prompts again, pause for you to solve:
-                input(f"⚠️ If captcha reappeared for {usn}, solve it and press ENTER...")
+                input(f"⚠️ If captcha appeared for {usn}, solve it and press ENTER...")
 
-        # At selection page now → capture Name before moving forward
+        # Get name
         name = get_student_name_on_selection()
 
-        # Click "View Results" inside Even May 2025 / Semester 4 card
+        # Click Even May 2025 results
         click_even_sem4_view_results()
 
-        # Wait for result page
-        # Look for CGPA/SGPA presence
+        # Wait for results page
         WebDriverWait(driver, 10).until(lambda d: on_result_page())
 
-        # Extract SGPA & CGPA using the fixed function
+        # Extract data
         sgpa, cgpa = get_sgpa_cgpa()
 
-        # If name wasn't captured earlier, try from result page as fallback
+        # Fallback name extraction
         if not name:
             try:
-                name_el = driver.find_element(By.XPATH, "//div[contains(@class,'stu-data1')]//h3 | //h3[contains(@class,'makebold') or contains(@class,'stu-data')]")
+                name_el = driver.find_element(By.XPATH, "//div[contains(@class,'stu-data1')]//h3")
                 name = re.sub(r"\s+", " ", name_el.text.strip())
             except:
                 name = ""
 
-        print(f"{usn} → Name: {name or '-'} | SGPA: {sgpa or '-'} | CGPA: {cgpa or '-'}")
+        print(f"✓ {usn} → Name: {name[:30] if name else '-'}... | SGPA: {sgpa or '-'} | CGPA: {cgpa or '-'}")
         results.append({"USN": usn, "Name": name or "", "SGPA": sgpa or "", "CGPA": cgpa or ""})
 
-        # Go back twice after results to reach the USN input page
+        # Navigate back
         click_site_back_button()
-        time.sleep(1)
+        time.sleep(1)  # Increased sleep for stability
         click_site_back_button()
 
-        # Wait until USN input is visible again
-        usn_input = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.NAME, "usn")))
-        
-        # Enter next USN (for the upcoming iteration)
-        next_usn = f"{USN_PREFIX}{(i+1):03d}" if i < END else usn
-        usn_input.clear()
-        usn_input.send_keys(next_usn)
-        
-        # Submit to go to selection page for next iteration
-        if i < END:  # Don't submit on the last iteration
+        # Enter next USN if not last iteration
+        if i < END:
+            usn_input = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.NAME, "usn")))
+            next_usn = f"{USN_PREFIX}{(i+1):03d}"
+            usn_input.clear()
+            usn_input.send_keys(next_usn)
+            
             go_btn = driver.find_element(By.XPATH, "//input[@type='submit']")
             driver.execute_script("arguments[0].click();", go_btn)
-            # Wait to reach selection page
             WebDriverWait(driver, 10).until(lambda d: on_selection_page())
 
     except Exception as e:
-        print(f"{usn} → Error: {e}")
+        print(f"✗ {usn} → Error: {e}")
         results.append({"USN": usn, "Name": "", "SGPA": "", "CGPA": ""})
-        # Try to get back to a safe page
         try:
             click_site_back_button()
             time.sleep(1)
@@ -233,11 +275,18 @@ for i in range(START, END + 1):
         except:
             pass
 
-# -----------------------------
-# SAVE
-# -----------------------------
-df = pd.DataFrame(results, columns=["USN", "Name", "SGPA", "CGPA"])
-df.to_excel(OUTPUT_XLSX, index=False)
-print(f"\n✅ Saved: {OUTPUT_XLSX}")
+# Save results
+if results:
+    df = pd.DataFrame(results, columns=["USN", "Name", "SGPA", "CGPA"])
+    df.to_excel(OUTPUT_XLSX, index=False)
+    
+    valid_sgpa = df[df['SGPA'] != '']['SGPA'].count()
+    valid_cgpa = df[df['CGPA'] != '']['CGPA'].count()
+    
+    print(f"\n🎉 SUCCESS! Saved {len(results)} results to {OUTPUT_XLSX}")
+    print(f"📈 Summary: {valid_sgpa} valid SGPA entries, {valid_cgpa} valid CGPA entries")
+else:
+    print("\n⚠️ No results collected")
 
 driver.quit()
+print("✅ Scraper completed!")
